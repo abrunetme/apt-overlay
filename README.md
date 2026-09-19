@@ -36,7 +36,7 @@ To add an application to your repository, simply create a new configuration file
 
 Your `.conf` files support the following variables:
 - `REPO_PATH`: The target GitHub repository (`Owner/Repository`).
-- `ASSET_NAME`: The exact filename of the release asset on GitHub (supports both `.tar.gz` archives and raw binaries).
+- `ASSET_NAME`: The exact filename of the release asset on GitHub (supports both `.tar.gz` archives and raw binaries). The `VERSION` and `TAG` tokens are resolved automatically (e.g. `hugo_VERSION_linux-amd64.tar.gz` becomes `hugo_0.166.0_linux-amd64.tar.gz`).
 - `DESCRIPTION`: A brief description embedded directly into the Debian package metadata.
 - `PKG_NAME` *(Optional)*: Overrides the package name (defaults to the filename without `.conf`).
 - `BINARY_NAME` *(Optional)*: Name of the executable to extract from a `.tar.gz` archive. Defaults to `PKG_NAME`; if not found, the largest executable file in the archive is used.
@@ -47,6 +47,14 @@ REPO_PATH="siderolabs/talos"
 ASSET_NAME="talosctl-linux-amd64"
 DESCRIPTION="Talos Linux cluster management command-line utility."
 ```
+
+### Example: `packages/hugo.conf`
+```bash
+REPO_PATH="gohugoio/hugo"
+ASSET_NAME="hugo_VERSION_linux-amd64.tar.gz"
+DESCRIPTION="Hugo is a static site generator written in Go."
+```
+The `VERSION` token is replaced automatically so versioned release assets never require a config update.
 
 ### Repository Signing
 

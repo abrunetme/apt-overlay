@@ -95,6 +95,10 @@ for pkg_file in "${ROOT}"/packages/*.conf; do
         continue
     fi
 
+    # Resolve VERSION/TAG tokens in ASSET_NAME (e.g. hugo_VERSION_linux-amd64.tar.gz)
+    ASSET_NAME="${ASSET_NAME//VERSION/$VERSION}"
+    ASSET_NAME="${ASSET_NAME//TAG/$LATEST_TAG}"
+
     # Skip build if the package version already exists in the repository
     matches=( "${REPO_DIR}/${PKG_NAME}_${VERSION}"_*.deb )
     if (( ${#matches[@]} )) && [[ -e "${matches[0]}" ]]; then
