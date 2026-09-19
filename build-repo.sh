@@ -107,6 +107,52 @@ cd "public" && dpkg-scanpackages dist /dev/null > dist/Packages
 gzip -9c dist/Packages > dist/Packages.gz
 echo -e "${GREEN}✔ Done!${NC}"
 
+# --- GENERATE HOMEPAGE PACKAGE LIST ---
+echo -e "\n${BLUE}➤ Generating homepage package list...${NC}"
+PACKAGES_FRAGMENT="/tmp/packages-fragment.html"
+
+awk '
+    /^Package: /     { pkg = $2; next }
+    /^Version: /     { ver = $2; next }
+    /^Filename: /    { file = $2; next }
+    /^Description: / { desc = substr($0, index($0, $2)); next }
+    /^$/             { emit(); next }
+    { next }
+    END { emit() }
+
+    function emit() {
+        if (pkg == "") return
+        gsub(/&/, "\\&amp;", desc)
+        gsub(/</, "\\&lt;", desc)
+        gsub(/>/, "\\&gt;", desc)
+        printf "      <li class=\"pkg\">\n"
+        printf "        <span class=\"pkg-name\">%s</span>\n", pkg
+        printf "        <a class=\"pkg-version\" href=\"./%s\">%s</a>\n", file, ver
+        printf "        <span class=\"pkg-desc\">%s</span>\n", desc
+        printf "      </li>\n"
+        pkg = ""; ver = ""; file = ""; desc = ""
+    }
+' dist/Packages > "${PACKAGES_FRAGMENT}"
+
+# The template lives at the project root (../index.html from here) and is never modified.
+# Materialize it into public/index.html, then inject the package list into that target only.
+if [ -f "../index.html" ]; then
+    cp "../index.html" index.html
+fi
+
+if [ ! -f "index.html" ]; then
+    echo -e "${YELLOW}⚠ No index.html found; skipping homepage package list.${NC}"
+elif grep -q '<!-- PACKAGES -->' index.html; then
+    awk '/<!-- PACKAGES -->/{exit} {print}' index.html > /tmp/index-head.html
+    awk 'f{print} /<!-- PACKAGES -->/{f=1}' index.html > /tmp/index-tail.html
+    cat /tmp/index-head.html "${PACKAGES_FRAGMENT}" /tmp/index-tail.html > index.html.tmp
+    mv index.html.tmp index.html
+    echo -e "${GREEN}✔ Homepage package list updated.${NC}"
+else
+    echo -e "${YELLOW}⚠ Marker <!-- PACKAGES --> not found in index.html; skipping.${NC}"
+fi
+rm -f /tmp/index-head.html /tmp/index-tail.html "${PACKAGES_FRAGMENT}"
+
 # --- SIGN APT REPOSITORY ---
 if [ -n "$GPG_PRIVATE_KEY" ] || gpg --list-secret-keys &>/dev/null; then
     echo -e "\n${BLUE}➤ Signing APT repository...${NC}"

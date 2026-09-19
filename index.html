@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APT Overlay — Custom Debian/Ubuntu repository</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --card: #111a2e;
+      --border: #24324f;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #22d3ee;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1200px 600px at 50% -10%, #1b2c4a 0%, var(--bg) 60%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    main {
+      max-width: 720px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 0.9rem;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      margin-bottom: 1rem;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.subtitle {
+      color: var(--muted);
+      font-size: 1.1rem;
+      line-height: 1.7;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      text-align: left;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    .card ul {
+      list-style: none;
+    }
+
+    .card li {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      padding: 0.35rem 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .card li::before {
+      content: "•";
+      color: var(--accent-2);
+      font-weight: bold;
+    }
+
+    .packages li::before {
+      content: none;
+    }
+
+    .packages .pkg {
+      display: grid;
+      grid-template-columns: 12ch auto 1fr;
+      column-gap: 0.9rem;
+      align-items: center;
+    }
+
+    .pkg-name {
+      font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pkg-version {
+      font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 0.85rem;
+      color: var(--accent-2);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.1rem 0.45rem;
+      white-space: nowrap;
+      width: 8ch;
+      text-align: center;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .pkg-version:hover {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.15);
+    }
+
+    .pkg-desc {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    code {
+      background: rgba(148, 163, 184, 0.15);
+      border-radius: 6px;
+      padding: 0.15rem 0.4rem;
+      font-size: 0.9em;
+      color: var(--text);
+    }
+
+    .links {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin-top: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .btn:hover { transform: translateY(-2px); }
+
+    .btn-primary {
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      color: #082f49;
+      box-shadow: 0 10px 25px rgba(56, 189, 248, 0.3);
+    }
+
+    .btn-secondary {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-secondary:hover { box-shadow: 0 10px 25px rgba(34, 211, 238, 0.15); }
+
+    footer {
+      margin-top: 2rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="badge">Public APT Repository · Online</span>
+    <h1>APT Overlay</h1>
+    <p class="subtitle">
+      A lightweight, declarative APT repository generator for Debian/Ubuntu.
+      Native <code>apt install</code> &amp; <code>apt upgrade</code> for standalone binaries
+      and GitHub release archives.
+    </p>
+
+    <div class="card">
+      <h2>Install a package</h2>
+      <ul>
+        <li>Add the repository to your APT sources.</li>
+        <li>Register the signing key: <code>curl -fsSL https://apt.abrunet.me/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/abrunet-overlay.gpg</code></li>
+        <li>Install with <code>sudo apt install sshm</code> and update seamlessly with <code>sudo apt upgrade</code>.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Available packages</h2>
+      <ul class="packages">
+        <!-- PACKAGES -->
+      </ul>
+    </div>
+
+    <div class="links">
+      <a class="btn btn-primary" href="https://github.com/abrunetme/apt-overlay" target="_blank" rel="noopener">
+        GitHub Repository
+      </a>
+      <a class="btn btn-secondary" href="https://apt.abrunet.me/dist/Packages" target="_blank" rel="noopener">
+        Browse Packages Index
+      </a>
+    </div>
+  </main>
+</body>
+</html>
