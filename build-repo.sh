@@ -253,17 +253,16 @@ awk '
         gsub(/&/, "\\&amp;", desc)
         gsub(/</, "\\&lt;", desc)
         gsub(/>/, "\\&gt;", desc)
-        repo = home
-        sub(/^https?:\/\/github\.com\//, "", repo)
-        gsub(/&/, "\\&amp;", repo)
-        gsub(/</, "\\&lt;", repo)
-        gsub(/>/, "\\&gt;", repo)
         printf "      <li class=\"pkg\">\n"
-        printf "        <span class=\"pkg-name\">%s</span>\n", pkg
+        if (home != "") {
+            printf "        <a class=\"pkg-name\" href=\"%s\">%s</a>\n", home, pkg
+        } else {
+            printf "        <span class=\"pkg-name\">%s</span>\n", pkg
+        }
         printf "        <a class=\"pkg-version\" href=\"./%s\">%s</a>\n", file, ver
-        printf "        <span class=\"pkg-desc\">%s <span class=\"pkg-src\">Source:\302\240<a href=\"%s\">%s</a></span></span>\n", desc, home, repo
+        printf "        <span class=\"pkg-desc\">%s</span>\n", desc
         printf "      </li>\n"
-        pkg = ""; ver = ""; file = ""; home = ""; desc = ""; repo = ""
+        pkg = ""; ver = ""; file = ""; home = ""; desc = ""
     }
 ' "${PUBLIC_DIR}/dist/Packages" > "${PACKAGES_FRAGMENT}"
 

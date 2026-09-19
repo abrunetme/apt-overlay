@@ -121,6 +121,16 @@
       text-overflow: ellipsis;
     }
 
+    .pkg-name a {
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .pkg-name a:hover {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+
     .pkg-version {
       font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
       font-size: 0.85rem;
@@ -145,19 +155,6 @@
       font-size: 0.9rem;
       line-height: 1.5;
     }
-
-    .pkg-src {
-      white-space: nowrap;
-    }
-
-    .pkg-src a {
-      color: var(--accent);
-      text-decoration: none;
-      font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
-      font-size: 0.8rem;
-    }
-
-    .pkg-src a:hover { text-decoration: underline; }
 
     code {
       background: rgba(148, 163, 184, 0.15);
