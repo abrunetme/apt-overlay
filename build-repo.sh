@@ -99,7 +99,7 @@ gzip -9c dist/Packages > dist/Packages.gz
 echo -e "${GREEN}✔ Done!${NC}"
 
 # --- GENERATE A BASIC INDEX FOR GITHUB PAGES ---
-cat << EOF > public/index.html
+cat << EOF > index.html
 <!DOCTYPE html>
 <html>
 <head><title>APT Overlay</title></head>
