@@ -187,7 +187,7 @@ done
 echo -e "\n${BLUE}➤ Indexing APT repository...${NC}"
 (
     cd "${PUBLIC_DIR}"
-    dpkg-scanpackages dist /dev/null > dist/Packages
+    apt-ftparchive packages dist > dist/Packages
     gzip -9c dist/Packages > dist/Packages.gz
 )
 echo -e "${GREEN}✔ Done!${NC}"
