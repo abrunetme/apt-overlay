@@ -104,7 +104,7 @@ if [ -n "$GPG_PRIVATE_KEY" ] || gpg --list-secret-keys &>/dev/null; then
     
     # 1. Create a Release metadata file
     cd dist || exit 1
-    apt-ftparchive release . > Release
+    apt-ftparchive -o APT::FTPArchive::Release::Codename=dist release . > Release
     cd ..
     
     # 2. Import the private key with robust handling of newlines
@@ -129,11 +129,3 @@ else
     echo -e "\n${YELLOW}⚠ Skipping signature: No GPG_PRIVATE_KEY found in environment.${NC}"
 fi
 
-# --- GENERATE A BASIC INDEX FOR GITHUB PAGES ---
-cat << EOF > index.html
-<!DOCTYPE html>
-<html>
-<head><title>APT Overlay</title></head>
-<body><h1>abrunetme APT Overlay Repository is Online</h1></body>
-</html>
-EOF
