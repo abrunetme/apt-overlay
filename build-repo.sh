@@ -98,6 +98,33 @@ cd "public" && dpkg-scanpackages dist /dev/null > dist/Packages
 gzip -9c dist/Packages > dist/Packages.gz
 echo -e "${GREEN}✔ Done!${NC}"
 
+# --- SIGN APT REPOSITORY ---
+# Check if a private key is available in the environment (for GitHub Actions)
+if [ -n "$GPG_PRIVATE_KEY" ] || gpg --list-secret-keys &>/dev/null; then
+    echo -e "\n${BLUE}➤ Signing APT repository...${NC}"
+    
+    # 1. Create a Release metadata file
+    cd dist
+    apt-ftparchive release . > Release
+    
+    # 2. Clear-sign and detached-sign the Release file
+    gpg --confdir /dev/null --import <(echo "$GPG_PRIVATE_KEY") 2>/dev/null || true
+    
+    # Get the key ID to sign
+    KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep -E '^sec' | awk '{print $2}' | cut -d'/' -f2 | head -n1)
+    
+    if [ -n "$KEY_ID" ]; then
+        gpg --default-key "$KEY_ID" --clearsign -o InRelease Release
+        gpg --default-key "$KEY_ID" -abs -o Release.gpg Release
+        echo -e "${GREEN}✔ Repository signed successfully with key $KEY_ID${NC}"
+    else
+        echo -e "${RED}✖ Error: No GPG signing key found.${NC}"
+    fi
+    cd ..
+else
+    echo -e "\n${YELLOW}⚠ Skipping signature: No GPG_PRIVATE_KEY found in environment.${NC}"
+fi
+
 # --- GENERATE A BASIC INDEX FOR GITHUB PAGES ---
 cat << EOF > index.html
 <!DOCTYPE html>
