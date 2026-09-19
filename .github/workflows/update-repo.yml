@@ -33,15 +33,43 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y apt-utils curl dpkg-dev gzip
 
+      - name: Setup GitHub Pages infrastructure
+        id: configure
+        uses: actions/configure-pages@v4
+
+      - name: Restore previous APT repository from GitHub Pages
+        env:
+          PAGES_URL: ${{ steps.configure.outputs.base_url }}
+        run: |
+          PAGES_URL="${PAGES_URL%/}"
+          echo "Restoring previous repository state from ${PAGES_URL}"
+          mkdir -p public/dist
+
+          if ! curl -fsSL "${PAGES_URL}/dist/Packages" -o /tmp/packages-previous; then
+            echo "::warning::No previous deployment found at ${PAGES_URL} — building repository from scratch."
+            exit 0
+          fi
+
+          declare -A LATEST_VERSION LATEST_FILE
+          while IFS=$'\t' read -r pkg ver file; do
+            if [[ -z "${LATEST_VERSION[$pkg]}" ]] || dpkg --compare-versions "$ver" gt "${LATEST_VERSION[$pkg]}"; then
+              LATEST_VERSION[$pkg]="$ver"
+              LATEST_FILE[$pkg]="$file"
+            fi
+          done < <(awk '/^Package: /{pkg=$2} /^Version: /{ver=$2} /^Filename: /{print pkg "\t" ver "\t" $2}' /tmp/packages-previous)
+
+          for file in "${LATEST_FILE[@]}"; do
+            echo "Restoring ${file}"
+            mkdir -p "$(dirname "public/${file}")"
+            curl -fsSL "${PAGES_URL}/${file}" -o "public/${file}" || echo "::warning::Failed to restore ${file}"
+          done
+
       - name: Execute builder script
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
           chmod +x build-repo.sh
           ./build-repo.sh
-
-      - name: Setup GitHub Pages infrastructure
-        uses: actions/configure-pages@v4
         
       - name: Upload static artifact for GitHub Pages
         uses: actions/upload-pages-artifact@v3

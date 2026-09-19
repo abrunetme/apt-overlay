@@ -84,6 +84,15 @@ EOF
         chmod +x "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
         dpkg-deb --build "${PKG_BUILD_DIR}" "${REPO_DIR}/" > /dev/null
         echo -e "${GREEN}✔ Successfully created .deb package for $PKG_NAME ($VERSION).${NC}"
+
+        # Keep only the latest version of this package in the repository
+        for old_deb in "${REPO_DIR}/${PKG_NAME}"_*.deb; do
+            [ -e "$old_deb" ] || continue
+            old_ver=$(dpkg-deb --field "$old_deb" Version 2>/dev/null)
+            if [[ "$old_ver" != "$VERSION" ]]; then
+                rm -f "$old_deb"
+            fi
+        done
     else
         echo -e "${RED}✖ Error: Target binary '$PKG_NAME' is missing from tree (extraction failure?).${NC}"
     fi
