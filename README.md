@@ -9,6 +9,8 @@ Everything is packaged in the cloud or on a machine of your choice and served se
 - **Declarative Configuration:** One clean `.conf` file per package dictates the metadata and source.
 - **Pure APT Integration:** Applications are managed natively via `apt install` and `apt upgrade`.
 - **Smart Archive Handling:** Automatically detects and extracts `.tar.gz` releases or handles raw standalone binaries.
+- **Content-Aware Skipping:** Packages are rebuilt only when their inputs change — a modified `build-repo.sh` or `.conf`, a new upstream version, or a corrupted artifact. Unchanged packages are never re-downloaded, keeping daily CI runs bandwidth-free.
+- **Automatic Cleanup:** Removing a `.conf` file removes the corresponding `.deb` and cache from the repository on the next build.
 - **Zero Local Footprint:** Designed to run seamlessly in GitHub Actions and serve packages statically via GitHub Pages.
 
 ---
@@ -40,6 +42,7 @@ Your `.conf` files support the following variables:
 - `DESCRIPTION`: A brief description embedded directly into the Debian package metadata.
 - `PKG_NAME` *(Optional)*: Overrides the package name (defaults to the filename without `.conf`).
 - `BINARY_NAME` *(Optional)*: Name of the executable to extract from a `.tar.gz` archive. Defaults to `PKG_NAME`; if not found, the largest executable file in the archive is used.
+- `HOME_PAGE` *(Optional)*: Upstream project URL. Defaults to `https://github.com/REPO_PATH`. Embedded in the `.deb` metadata (`apt show <pkg>`) and shown as a link on the index page.
 
 ### Example: `packages/talosctl.conf`
 ```bash

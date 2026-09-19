@@ -6,6 +6,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${ROOT}/public/dist"
 PUBLIC_DIR="${ROOT}/public"
 BUILD_DIR="${ROOT}/build"
+CACHE_DIR="${REPO_DIR}/.cache"
+SCRIPT_FILE="${ROOT}/build-repo.sh"
 
 # Terminal colors
 BLUE="\e[1;34m"
@@ -51,6 +53,27 @@ get_latest_tag() {
         | sed -E 's/.*"([^"]+)".*/\1/' || true
 }
 
+hash_file() {
+    sha256sum "$1" 2>/dev/null | cut -d' ' -f1 || true
+}
+
+# --- Clean up packages whose .conf no longer exists ---
+# Iterating once over the cache and the repository prevents orphaned
+# .deb files and sidecars from being served after a package is removed.
+shopt -s nullglob
+for file in "${CACHE_DIR}/"*.sha "${REPO_DIR}/"*.deb; do
+    [ -e "$file" ] || continue
+    case "$file" in
+        *.sha) pkg_name="$(basename "$file" .sha)" ;;
+        *)     pkg_name="$(basename "$file" | cut -d_ -f1)" ;;
+    esac
+    if [ ! -f "${ROOT}/packages/${pkg_name}.conf" ]; then
+        echo -e "${YELLOW}➔ Removing orphaned artifact for removed package '${pkg_name}': $(basename "$file")${NC}"
+        rm -f "$file"
+    fi
+done
+shopt -u nullglob
+
 for pkg_file in "${ROOT}"/packages/*.conf; do
     # Continue if packages directory is empty
     [ -e "$pkg_file" ] || continue
@@ -58,7 +81,7 @@ for pkg_file in "${ROOT}"/packages/*.conf; do
     echo -e "${BLUE}Processing package: $(basename "$pkg_file")${NC}"
 
     # Reset previous package definition (all supported keys)
-    unset REPO_PATH PKG_NAME DESCRIPTION ASSET_NAME BINARY_NAME
+    unset REPO_PATH PKG_NAME DESCRIPTION ASSET_NAME BINARY_NAME HOME_PAGE
 
     # Load package definition
     source "$pkg_file"
@@ -99,9 +122,21 @@ for pkg_file in "${ROOT}"/packages/*.conf; do
     ASSET_NAME="${ASSET_NAME//VERSION/$VERSION}"
     ASSET_NAME="${ASSET_NAME//TAG/$LATEST_TAG}"
 
-    # Skip build if the package version already exists in the repository
-    matches=( "${REPO_DIR}/${PKG_NAME}_${VERSION}"_*.deb )
-    if (( ${#matches[@]} )) && [[ -e "${matches[0]}" ]]; then
+    # Fingerprint of this package's build inputs (script + .conf).
+    # Any change to either forces a regeneration of this package.
+    FINGERPRINT="$(hash_file "${SCRIPT_FILE}")$(hash_file "$pkg_file")"
+
+    # Skip build if the existing .deb matches the current build inputs.
+    mkdir -p "${CACHE_DIR}"
+    DEB_ARCHIVE="${REPO_DIR}/${PKG_NAME}_${VERSION}_amd64.deb"
+    CACHE_FILE="${CACHE_DIR}/${PKG_NAME}.sha"
+    CACHED_FINGERPRINT=""; CACHED_DEB_SHA=""
+    if [ -f "${CACHE_FILE}" ]; then
+        IFS=$'\t' read -r CACHED_FINGERPRINT CACHED_DEB_SHA < "${CACHE_FILE}" || true
+    fi
+    if [ -f "${DEB_ARCHIVE}" ] \
+       && [ "${CACHED_FINGERPRINT}" = "${FINGERPRINT}" ] \
+       && [ "$(sha256sum "${DEB_ARCHIVE}" | cut -d' ' -f1)" = "${CACHED_DEB_SHA}" ]; then
         echo -e "${GREEN}✔ $PKG_NAME ($VERSION) is already up to date.${NC}"
         SKIPPED=$((SKIPPED + 1))
         continue
@@ -110,12 +145,14 @@ for pkg_file in "${ROOT}"/packages/*.conf; do
     # Prepare Debian build directory structure
     PKG_BUILD_DIR="${BUILD_DIR}/${PKG_NAME}_${VERSION}_amd64"
     mkdir -p "${PKG_BUILD_DIR}/DEBIAN" "${PKG_BUILD_DIR}/usr/local/bin"
+    HOME_PAGE="${HOME_PAGE:-https://github.com/${REPO_PATH}}"
 
     cat << EOF > "${PKG_BUILD_DIR}/DEBIAN/control"
 Package: ${PKG_NAME}
 Version: ${VERSION}
 Architecture: amd64
 Maintainer: APT Overlay System
+Homepage: ${HOME_PAGE}
 Description: ${DESCRIPTION:-}
 EOF
 
@@ -182,6 +219,7 @@ EOF
     done
 
     BUILT=$((BUILT + 1))
+    printf '%s\t%s\n' "${FINGERPRINT}" "$(sha256sum "${DEB_ARCHIVE}" | cut -d' ' -f1)" > "${CACHE_FILE}"
 
     # Cleanup build workspace for this package
     rm -rf "${PKG_BUILD_DIR}"
@@ -205,6 +243,7 @@ awk '
     /^Version: /     { ver = $2; next }
     /^Filename: /    { file = $2; next }
     /^Description: / { desc = substr($0, index($0, $2)); next }
+    /^Homepage: /    { home = $2; next }
     /^$/             { emit(); next }
     { next }
     END { emit() }
@@ -214,12 +253,17 @@ awk '
         gsub(/&/, "\\&amp;", desc)
         gsub(/</, "\\&lt;", desc)
         gsub(/>/, "\\&gt;", desc)
+        repo = home
+        sub(/^https?:\/\/github\.com\//, "", repo)
+        gsub(/&/, "\\&amp;", repo)
+        gsub(/</, "\\&lt;", repo)
+        gsub(/>/, "\\&gt;", repo)
         printf "      <li class=\"pkg\">\n"
         printf "        <span class=\"pkg-name\">%s</span>\n", pkg
         printf "        <a class=\"pkg-version\" href=\"./%s\">%s</a>\n", file, ver
-        printf "        <span class=\"pkg-desc\">%s</span>\n", desc
+        printf "        <span class=\"pkg-desc\">%s <span class=\"pkg-src\">Source:\302\240<a href=\"%s\">%s</a></span></span>\n", desc, home, repo
         printf "      </li>\n"
-        pkg = ""; ver = ""; file = ""; desc = ""
+        pkg = ""; ver = ""; file = ""; home = ""; desc = ""; repo = ""
     }
 ' "${PUBLIC_DIR}/dist/Packages" > "${PACKAGES_FRAGMENT}"
 
