@@ -97,3 +97,12 @@ echo -e "\n${BLUE}➤ Indexing APT repository...${NC}"
 cd "public" && dpkg-scanpackages dist /dev/null > dist/Packages
 gzip -9c dist/Packages > dist/Packages.gz
 echo -e "${GREEN}✔ Done!${NC}"
+
+# --- GENERATE A BASIC INDEX FOR GITHUB PAGES ---
+cat << EOF > public/index.html
+<!DOCTYPE html>
+<html>
+<head><title>APT Overlay</title></head>
+<body><h1>abrunetme APT Overlay Repository is Online</h1></body>
+</html>
+EOF
