@@ -1,12 +1,12 @@
 # apt-overlay
 
-A lightweight, Gentoo-inspired declarative APT repository generator. This project acts as a custom "overlay" for Debian/Ubuntu systems, allowing you to wrap standalone binaries or `.tar.gz` releases from GitHub into native `.deb` packages using a simple configuration file per application.
+A lightweight APT repository generator for Debian/Ubuntu that wraps standalone binaries or `.tar.gz` releases from GitHub into native `.deb` packages using a simple configuration file per application.
 
 Everything is packaged in the cloud or on a machine of your choice and served seamlessly as a standard APT repository—eliminating the need for Homebrew, Snaps, Flatpaks, or messy manual `curl | bash` install scripts.
 
 ## Features
 
-- **Gentoo Philosophy:** One clean `.conf` file per package dictates the metadata and source.
+- **Declarative Configuration:** One clean `.conf` file per package dictates the metadata and source.
 - **Pure APT Integration:** Applications are managed natively via `apt install` and `apt upgrade`.
 - **Smart Archive Handling:** Automatically detects and extracts `.tar.gz` releases or handles raw standalone binaries.
 - **Zero Local Footprint:** Designed to run seamlessly in GitHub Actions and serve packages statically via GitHub Pages.
@@ -17,10 +17,12 @@ Everything is packaged in the cloud or on a machine of your choice and served se
 
 ```text
 apt-overlay/
-├── build-repo.sh       # The core package engine (Portage-style builder)
+├── build-repo.sh       # The core package engine
+├── index.html          # Homepage template (package list is injected at build time)
+├── Release.key         # Public GPG signing key for APT clients
 ├── packages/           # Folder containing your package recipe configurations
 │   └── sshm.conf       # Example configuration for SSHM
-└── public/             # The output directory containing your static APT repository
+└── public/             # Fully generated at build time (gitignored)
     └── dist/           # Compiled .deb files and Packages index
 ```
 
@@ -37,13 +39,8 @@ Your `.conf` files support the following variables:
 - `ASSET_NAME`: The exact filename of the release asset on GitHub (supports both `.tar.gz` archives and raw binaries).
 - `DESCRIPTION`: A brief description embedded directly into the Debian package metadata.
 - `PKG_NAME` *(Optional)*: Overrides the package name (defaults to the filename without `.conf`).
-
-### Example: `packages/sshm.conf`
-```bash
-REPO_PATH="Gu1llaum-3/sshm"
-ASSET_NAME="sshm_Linux_x86_64.tar.gz"
-DESCRIPTION="SSHM is a beautiful command-line tool that transforms how you manage and connect to your SSH hosts with an intuitive TUI interface."
-```
+- `BINARY_NAME` *(Optional)*: Name of the executable to extract from a `.tar.gz` archive. Defaults to `PKG_NAME`; if not found, the largest executable file in the archive is used.
+- `GPG_KEY_ID` *(Optional, environment variable)*: Overrides the GPG key used to sign the repository instead of the first key found in the keyring.
 
 ### Example: `packages/talosctl.conf`
 ```bash
