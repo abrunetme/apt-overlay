@@ -32,7 +32,7 @@ jobs:
 
       - name: Execute builder script
         env:
-          GPG_PRIVATE_KEY: ${{ secrets::GPG_PRIVATE_KEY }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
           chmod +x build-repo.sh
           ./build-repo.sh
