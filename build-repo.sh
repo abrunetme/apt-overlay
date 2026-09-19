@@ -99,28 +99,32 @@ gzip -9c dist/Packages > dist/Packages.gz
 echo -e "${GREEN}✔ Done!${NC}"
 
 # --- SIGN APT REPOSITORY ---
-# Check if a private key is available in the environment (for GitHub Actions)
 if [ -n "$GPG_PRIVATE_KEY" ] || gpg --list-secret-keys &>/dev/null; then
     echo -e "\n${BLUE}➤ Signing APT repository...${NC}"
     
     # 1. Create a Release metadata file
-    cd dist
+    cd dist || exit 1
     apt-ftparchive release . > Release
+    cd ..
     
-    # 2. Clear-sign and detached-sign the Release file
-    gpg --confdir /dev/null --import <(echo "$GPG_PRIVATE_KEY") 2>/dev/null || true
+    # 2. Import the private key with robust handling of newlines
+    if [ -n "$GPG_PRIVATE_KEY" ]; then
+        echo "$GPG_PRIVATE_KEY" | gpg --batch --import &>/dev/null
+    fi
     
-    # Get the key ID to sign
+    # 3. Get the LONG format Key ID
     KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep -E '^sec' | awk '{print $2}' | cut -d'/' -f2 | head -n1)
     
     if [ -n "$KEY_ID" ]; then
-        gpg --default-key "$KEY_ID" --clearsign -o InRelease Release
-        gpg --default-key "$KEY_ID" -abs -o Release.gpg Release
+        cd dist || exit 1
+        # Sign files
+        gpg --batch --yes --default-key "$KEY_ID" --clearsign -o InRelease Release
+        gpg --batch --yes --default-key "$KEY_ID" -abs -o Release.gpg Release
+        cd ..
         echo -e "${GREEN}✔ Repository signed successfully with key $KEY_ID${NC}"
     else
-        echo -e "${RED}✖ Error: No GPG signing key found.${NC}"
+        echo -e "${RED}✖ Error: No GPG signing key found in GnuPG keyring.${NC}"
     fi
-    cd ..
 else
     echo -e "\n${YELLOW}⚠ Skipping signature: No GPG_PRIVATE_KEY found in environment.${NC}"
 fi
