@@ -68,7 +68,7 @@ chmod +x build-repo.sh
 Once your `public/` directory is hosted online (e.g., via GitHub Pages at `https://apt.abrunet.me/`) or locally, add it to your system's APT sources:
 
 ```bash
-curl -fsSL https://apt.abrunet.me/public_key.asc | sudo gpg --dearmor -o /etc/apt/keyrings/abrunet-overlay.gpg
+curl -fsSL https://apt.abrunet.me/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/abrunet-overlay.gpg
 echo "deb [signed-by=/etc/apt/keyrings/abrunet-overlay.gpg] https://apt.abrunet.me dist/" | sudo tee /etc/apt/sources.list.d/apt-overlay.list
 ```
 
