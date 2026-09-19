@@ -40,7 +40,6 @@ Your `.conf` files support the following variables:
 - `DESCRIPTION`: A brief description embedded directly into the Debian package metadata.
 - `PKG_NAME` *(Optional)*: Overrides the package name (defaults to the filename without `.conf`).
 - `BINARY_NAME` *(Optional)*: Name of the executable to extract from a `.tar.gz` archive. Defaults to `PKG_NAME`; if not found, the largest executable file in the archive is used.
-- `GPG_KEY_ID` *(Optional, environment variable)*: Overrides the GPG key used to sign the repository instead of the first key found in the keyring.
 
 ### Example: `packages/talosctl.conf`
 ```bash
@@ -48,6 +47,13 @@ REPO_PATH="siderolabs/talos"
 ASSET_NAME="talosctl-linux-amd64"
 DESCRIPTION="Talos Linux cluster management command-line utility."
 ```
+
+### Repository Signing
+
+The repository is signed exactly once at the end of the build: the `dist/Release` index is signed with a single GPG key, producing `dist/InRelease` and `dist/Release.gpg`. Individual `.deb` packages are not signed — APT authenticates them through the checksums in the signed `Packages` index.
+
+- `GPG_KEY_ID` *(optional, environment)*: Forces the key used to sign the repository. Required locally, where the shared `~/.gnupg` store often contains several secret keys and the first-match fallback may pick the wrong one.
+- `GPG_PRIVATE_KEY` *(optional, environment)*: ASCII-armored private key to import into the keyring before signing (used in CI).
 
 ---
 
