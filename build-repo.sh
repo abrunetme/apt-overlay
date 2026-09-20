@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="${ROOT}/public/dist"
 PUBLIC_DIR="${ROOT}/public"
 BUILD_DIR="${ROOT}/build"
-CACHE_DIR="${REPO_DIR}/.cache"
+CACHE_DIR="${REPO_DIR}/cache"
 SCRIPT_FILE="${ROOT}/build-repo.sh"
 
 # Terminal colors

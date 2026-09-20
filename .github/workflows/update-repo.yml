@@ -63,11 +63,11 @@ jobs:
             mkdir -p "$(dirname "public/${file}")"
             curl -fsSL "${PAGES_URL}/${file}" -o "public/${file}" || echo "::warning::Failed to restore ${file}"
           done
-          CACHE_DIR="public/dist/.cache"
+          CACHE_DIR="public/dist/cache"
           mkdir -p "${CACHE_DIR}"
           for pkg in "${!LATEST_VERSION[@]}"; do
             echo "Restoring cache for ${pkg}"
-            curl -fsSL "${PAGES_URL}/dist/.cache/${pkg}.sha" -o "${CACHE_DIR}/${pkg}.sha" \
+            curl -fsSL "${PAGES_URL}/dist/cache/${pkg}.sha" -o "${CACHE_DIR}/${pkg}.sha" \
               || echo "::warning::No cache found for ${pkg}"
           done
 
