@@ -240,7 +240,7 @@
         <li>Add the repository to your APT sources:</li>
       </ul>
       <pre class="cmd">curl -fsSL https://apt.abrunet.me/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/abrunet-overlay.gpg
-echo "deb [signed-by=/etc/apt/keyrings/abrunet-overlay.gpg] https://apt.abrunet.me dist/" | sudo tee /etc/apt/sources.list.d/apt-overlay.list</pre>
+echo "deb [signed-by=/etc/apt/keyrings/abrunet-overlay.gpg] https://apt.abrunet.me dist/" | sudo tee /etc/apt/sources.list.d/abrunetme-overlay.list</pre>
       <ul>
         <li>Install with <code>sudo apt install sshm</code> and update seamlessly with <code>sudo apt upgrade</code>.</li>
       </ul>
