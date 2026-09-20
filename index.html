@@ -164,6 +164,21 @@
       color: var(--text);
     }
 
+    pre.cmd {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      margin: 0 0 1rem;
+      overflow-x: auto;
+      font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      color: var(--text);
+      text-align: left;
+      white-space: pre;
+    }
+
     .links {
       display: flex;
       gap: 1rem;
@@ -222,8 +237,11 @@
     <div class="card">
       <h2>Install a package</h2>
       <ul>
-        <li>Add the repository to your APT sources.</li>
-        <li>Register the signing key: <code>curl -fsSL https://apt.abrunet.me/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/abrunet-overlay.gpg</code></li>
+        <li>Add the repository to your APT sources:</li>
+      </ul>
+      <pre class="cmd">curl -fsSL https://apt.abrunet.me/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/abrunet-overlay.gpg
+echo "deb [signed-by=/etc/apt/keyrings/abrunet-overlay.gpg] https://apt.abrunet.me dist/" | sudo tee /etc/apt/sources.list.d/apt-overlay.list</pre>
+      <ul>
         <li>Install with <code>sudo apt install sshm</code> and update seamlessly with <code>sudo apt upgrade</code>.</li>
       </ul>
     </div>
