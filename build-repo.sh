@@ -81,7 +81,7 @@ for pkg_file in "${ROOT}"/packages/*.conf; do
     echo -e "${BLUE}Processing package: $(basename "$pkg_file")${NC}"
 
     # Reset previous package definition (all supported keys)
-    unset REPO_PATH PKG_NAME DESCRIPTION ASSET_NAME BINARY_NAME HOME_PAGE DOWNLOAD_URL LATEST_URL
+    unset REPO_PATH PKG_NAME DESCRIPTION ASSET_NAME BINARY_NAME HOME_PAGE DOWNLOAD_URL LATEST_URL LATEST_JSON_FIELD
 
     # Load package definition
     source "$pkg_file"
@@ -107,8 +107,22 @@ for pkg_file in "${ROOT}"/packages/*.conf; do
     # Fetch and validate the latest release version.
     # LATEST_URL overrides the GitHub releases API with any version source
     # that returns the latest tag/version (e.g. https://dl.k8s.io/release/stable.txt).
+    # LATEST_JSON_FIELD extracts a dotted path (e.g. .tag_name) from a JSON response.
     if [[ -n "${LATEST_URL:-}" ]]; then
-        LATEST_TAG="$(curl -fsSL --retry 3 "${LATEST_URL}" | tr -d '[:space:]')"
+        if [[ -n "${LATEST_JSON_FIELD:-}" ]]; then
+            if [[ ! "$LATEST_JSON_FIELD" =~ ^[.a-zA-Z0-9_]+$ ]]; then
+                echo -e "${RED}✖ Error: Invalid LATEST_JSON_FIELD '$LATEST_JSON_FIELD' (expected a dotted path, e.g. .tag_name)${NC}"
+                FAILED=$((FAILED + 1))
+                continue
+            fi
+            LATEST_TAG="$(curl -fsSL --retry 3 "${LATEST_URL}" | python3 -c "import json,sys
+d=json.load(sys.stdin)
+for k in '${LATEST_JSON_FIELD#.}'.split('.'):
+    d=d[k]
+print(d)")"
+        else
+            LATEST_TAG="$(curl -fsSL --retry 3 "${LATEST_URL}" | tr -d '[:space:]')"
+        fi
     else
         LATEST_TAG="$(get_latest_tag "${REPO_PATH}")"
     fi

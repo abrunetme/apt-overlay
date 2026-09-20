@@ -44,6 +44,7 @@ Your `.conf` files support the following variables:
 - `BINARY_NAME` *(Optional)*: Name of the executable to extract from a `.tar.gz` archive. Defaults to `PKG_NAME`; if not found, the largest executable file in the archive is used.
 - `HOME_PAGE` *(Optional)*: Upstream project URL. Defaults to `https://github.com/REPO_PATH`. Embedded in the `.deb` metadata (`apt show <pkg>`) and shown as a link on the index page.
 - `LATEST_URL` *(Optional)*: URL returning the latest version/tag, overriding the GitHub releases API. Enables non-GitHub sources such as `https://dl.k8s.io/release/stable.txt`.
+- `LATEST_JSON_FIELD` *(Optional)*: Dotted path to read the version from a JSON response returned by `LATEST_URL` (e.g. `.tag_name` for a GitHub API payload).
 - `DOWNLOAD_URL` *(Optional)*: Download URL template, overriding the default `https://github.com/REPO_PATH/releases/download/LATEST_TAG/ASSET_NAME`. Supports the same `VERSION` and `TAG` tokens — useful when the version is embedded in the URL path.
 
 ### Example: `packages/talosctl.conf`
@@ -70,6 +71,18 @@ ASSET_NAME="kubectl"
 DESCRIPTION="Kubernetes command-line tool for running commands against Kubernetes clusters."
 ```
 `LATEST_URL` feeds the version while `DOWNLOAD_URL` bypasses GitHub entirely — use `TAG` when the URL requires the leading `v` (e.g. `v1.37.0`).
+
+### Example: `packages/helm.conf`
+```bash
+REPO_PATH="helm/helm"
+LATEST_URL="https://api.github.com/repos/helm/helm/releases/latest"
+LATEST_JSON_FIELD="tag_name"
+DOWNLOAD_URL="https://get.helm.sh/helm-VERSION-linux-amd64.tar.gz"
+ASSET_NAME="helm-VERSION-linux-amd64.tar.gz"
+BINARY_NAME="helm"
+DESCRIPTION="Helm is the package manager for Kubernetes."
+```
+Helm distributes its binaries on `get.helm.sh` (not as GitHub assets): `LATEST_JSON_FIELD` extracts the tag from the GitHub API response while `DOWNLOAD_URL` points at the actual archive host.
 
 ### Repository Signing
 
