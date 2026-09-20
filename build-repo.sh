@@ -81,7 +81,7 @@ for pkg_file in "${ROOT}"/packages/*.conf; do
     echo -e "${BLUE}Processing package: $(basename "$pkg_file")${NC}"
 
     # Reset previous package definition (all supported keys)
-    unset REPO_PATH PKG_NAME DESCRIPTION ASSET_NAME BINARY_NAME HOME_PAGE
+    unset REPO_PATH PKG_NAME DESCRIPTION ASSET_NAME BINARY_NAME HOME_PAGE DOWNLOAD_URL LATEST_URL
 
     # Load package definition
     source "$pkg_file"
@@ -104,8 +104,14 @@ for pkg_file in "${ROOT}"/packages/*.conf; do
         continue
     fi
 
-    # Fetch and validate the latest release version
-    LATEST_TAG="$(get_latest_tag "${REPO_PATH}")"
+    # Fetch and validate the latest release version.
+    # LATEST_URL overrides the GitHub releases API with any version source
+    # that returns the latest tag/version (e.g. https://dl.k8s.io/release/stable.txt).
+    if [[ -n "${LATEST_URL:-}" ]]; then
+        LATEST_TAG="$(curl -fsSL --retry 3 "${LATEST_URL}" | tr -d '[:space:]')"
+    else
+        LATEST_TAG="$(get_latest_tag "${REPO_PATH}")"
+    fi
     if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
         echo -e "${RED}✖ Error: Failed to fetch latest release from ${REPO_PATH}${NC}"
         FAILED=$((FAILED + 1))
@@ -156,8 +162,12 @@ Homepage: ${HOME_PAGE}
 Description: ${DESCRIPTION:-}
 EOF
 
-    # Build download URL using LATEST_TAG to avoid GitHub 404 errors
-    DOWNLOAD_URL="https://github.com/${REPO_PATH}/releases/download/${LATEST_TAG}/${ASSET_NAME}"
+    # Build download URL using LATEST_TAG to avoid GitHub 404 errors.
+    # DOWNLOAD_URL overrides the GitHub releases URL with a custom template
+    # and supports the same VERSION/TAG tokens (e.g. dl.k8s.io URLs).
+    DOWNLOAD_URL="${DOWNLOAD_URL:-https://github.com/${REPO_PATH}/releases/download/${LATEST_TAG}/${ASSET_NAME}}"
+    DOWNLOAD_URL="${DOWNLOAD_URL//VERSION/$VERSION}"
+    DOWNLOAD_URL="${DOWNLOAD_URL//TAG/$LATEST_TAG}"
 
     # Handle asset types dynamically (.tar.gz extraction vs standalone binary)
     if [[ "$ASSET_NAME" == *.tar.gz ]]; then

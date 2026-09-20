@@ -43,6 +43,8 @@ Your `.conf` files support the following variables:
 - `PKG_NAME` *(Optional)*: Overrides the package name (defaults to the filename without `.conf`).
 - `BINARY_NAME` *(Optional)*: Name of the executable to extract from a `.tar.gz` archive. Defaults to `PKG_NAME`; if not found, the largest executable file in the archive is used.
 - `HOME_PAGE` *(Optional)*: Upstream project URL. Defaults to `https://github.com/REPO_PATH`. Embedded in the `.deb` metadata (`apt show <pkg>`) and shown as a link on the index page.
+- `LATEST_URL` *(Optional)*: URL returning the latest version/tag, overriding the GitHub releases API. Enables non-GitHub sources such as `https://dl.k8s.io/release/stable.txt`.
+- `DOWNLOAD_URL` *(Optional)*: Download URL template, overriding the default `https://github.com/REPO_PATH/releases/download/LATEST_TAG/ASSET_NAME`. Supports the same `VERSION` and `TAG` tokens — useful when the version is embedded in the URL path.
 
 ### Example: `packages/talosctl.conf`
 ```bash
@@ -58,6 +60,16 @@ ASSET_NAME="hugo_VERSION_linux-amd64.tar.gz"
 DESCRIPTION="Hugo is a static site generator written in Go."
 ```
 The `VERSION` token is replaced automatically so versioned release assets never require a config update.
+
+### Example: `packages/kubectl.conf`
+```bash
+REPO_PATH="kubernetes/kubernetes"
+LATEST_URL="https://dl.k8s.io/release/stable.txt"
+DOWNLOAD_URL="https://dl.k8s.io/release/TAG/bin/linux/amd64/kubectl"
+ASSET_NAME="kubectl"
+DESCRIPTION="Kubernetes command-line tool for running commands against Kubernetes clusters."
+```
+`LATEST_URL` feeds the version while `DOWNLOAD_URL` bypasses GitHub entirely — use `TAG` when the URL requires the leading `v` (e.g. `v1.37.0`).
 
 ### Repository Signing
 
