@@ -115,11 +115,21 @@ for pkg_file in "${ROOT}"/packages/*.conf; do
                 FAILED=$((FAILED + 1))
                 continue
             fi
-            LATEST_TAG="$(curl -fsSL --retry 3 "${LATEST_URL}" | python3 -c "import json,sys
+            LATEST_TAG=""
+            # Route GitHub API URLs through the authenticated gh CLI when available
+            # (it uses GITHUB_TOKEN on runners, avoiding anonymous API rate limits).
+            if command -v gh >/dev/null 2>&1 && [[ "${LATEST_URL}" == https://api.github.com/* ]]; then
+                JQ_FIELD="${LATEST_JSON_FIELD}"
+                [[ "$JQ_FIELD" == .* ]] || JQ_FIELD=".${JQ_FIELD}"
+                LATEST_TAG="$(gh api "${LATEST_URL#https://api.github.com/}" --jq "${JQ_FIELD}" 2>/dev/null || true)"
+            fi
+            if [[ -z "$LATEST_TAG" ]]; then
+                LATEST_TAG="$(curl -fsSL --retry 3 "${LATEST_URL}" | python3 -c "import json,sys
 d=json.load(sys.stdin)
 for k in '${LATEST_JSON_FIELD#.}'.split('.'):
     d=d[k]
 print(d)")"
+            fi
         else
             LATEST_TAG="$(curl -fsSL --retry 3 "${LATEST_URL}" | tr -d '[:space:]')"
         fi
