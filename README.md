@@ -42,6 +42,7 @@ Your `.conf` files support the following variables:
 - `DESCRIPTION`: A brief description embedded directly into the Debian package metadata.
 - `PKG_NAME` *(Optional)*: Overrides the package name (defaults to the filename without `.conf`).
 - `BINARY_NAME` *(Optional)*: Name of the executable to extract from a `.tar.gz` archive. Defaults to `PKG_NAME`; if not found, the largest executable file in the archive is used.
+- `APP_DIR` *(Optional)*: Full-app mode for Electron-style bundles. When set, the entire extracted `.tar.gz` tree is installed under `/opt/<APP_DIR>` inside the `.deb` and a symlink to the launcher (see `BINARY_NAME`) is created in `/usr/local/bin/<PKG_NAME>`. Use this for apps that need their bundled libs/resources next to the binary.
 - `HOME_PAGE` *(Optional)*: Upstream project URL. Defaults to `https://github.com/REPO_PATH`. Embedded in the `.deb` metadata (`apt show <pkg>`) and shown as a link on the index page.
 - `LATEST_URL` *(Optional)*: URL returning the latest version/tag, overriding the GitHub releases API. Enables non-GitHub sources such as `https://dl.k8s.io/release/stable.txt`.
 - `LATEST_JSON_FIELD` *(Optional)*: Dotted path to read the version from a JSON response returned by `LATEST_URL` (e.g. `.tag_name` for a GitHub API payload).
@@ -83,6 +84,16 @@ BINARY_NAME="helm"
 DESCRIPTION="Helm is the package manager for Kubernetes."
 ```
 Helm distributes its binaries on `get.helm.sh` (not as GitHub assets): `LATEST_JSON_FIELD` extracts the tag from the GitHub API response while `DOWNLOAD_URL` points at the actual archive host.
+
+### Example: `packages/rocketchat.conf`
+```bash
+REPO_PATH="RocketChat/Rocket.Chat.Electron"
+ASSET_NAME="rocketchat-VERSION-linux-x64.tar.gz"
+BINARY_NAME="rocketchat-desktop"
+APP_DIR="rocketchat"
+DESCRIPTION="The Rocket.Chat email and team chat desktop client."
+```
+Rocket.Chat ships as an Electron bundle: `APP_DIR` installs the whole archive under `/opt/rocketchat` and links `/usr/local/bin/rocketchat` to its launcher, letting the app find its bundled libs and resources at runtime.
 
 ### Repository Signing
 

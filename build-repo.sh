@@ -81,7 +81,7 @@ for pkg_file in "${ROOT}"/packages/*.conf; do
     echo -e "${BLUE}Processing package: $(basename "$pkg_file")${NC}"
 
     # Reset previous package definition (all supported keys)
-    unset REPO_PATH PKG_NAME DESCRIPTION ASSET_NAME BINARY_NAME HOME_PAGE DOWNLOAD_URL LATEST_URL LATEST_JSON_FIELD
+    unset REPO_PATH PKG_NAME DESCRIPTION ASSET_NAME BINARY_NAME HOME_PAGE DOWNLOAD_URL LATEST_URL LATEST_JSON_FIELD APP_DIR
 
     # Load package definition
     source "$pkg_file"
@@ -191,45 +191,87 @@ EOF
         curl -fsSL --retry 3 "$DOWNLOAD_URL" -o "${EXTRACT_DIR}/archive.tar.gz"
         tar -xzf "${EXTRACT_DIR}/archive.tar.gz" -C "${EXTRACT_DIR}/"
 
-        # Locate the target binary inside the archive:
-        # 1. Explicit BINARY_NAME (or package name) at the archive root
-        # 2. Same name anywhere in the tree
-        # 3. The largest executable file found
-        TARGET_NAME="${BINARY_NAME:-$PKG_NAME}"
-        BINARY_SRC=""
-        if [ -f "${EXTRACT_DIR}/${TARGET_NAME}" ]; then
-            BINARY_SRC="${EXTRACT_DIR}/${TARGET_NAME}"
-        elif [ -f "${EXTRACT_DIR}/${PKG_NAME}" ]; then
-            BINARY_SRC="${EXTRACT_DIR}/${PKG_NAME}"
+        # APP_DIR: full-app mode (Electron bundles etc.). Instead of installing
+        # a single binary, copy the whole extracted app tree into /opt/<APP_DIR>
+        # inside the .deb and symlink the launcher into /usr/local/bin so the
+        # app can locate its bundled libs/resources next to itself.
+        if [[ -n "${APP_DIR:-}" ]]; then
+            APP_ROOT="${PKG_BUILD_DIR}/opt/${APP_DIR}"
+            mkdir -p "${APP_ROOT}"
+
+            # Locate the app's top-level directory inside the archive (e.g.
+            # rocketchat-4.17.1-linux-x64/) and copy its full contents.
+            APP_SRCDIR="${EXTRACT_DIR}"
+            TOP_LEVEL_DIR="$(find "${EXTRACT_DIR}" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null || true)"
+            if [[ -n "$TOP_LEVEL_DIR" ]]; then
+                APP_SRCDIR="$TOP_LEVEL_DIR"
+            fi
+            cp -a "${APP_SRCDIR}/." "${APP_ROOT}/"
+
+            # Launcher binary name inside the app tree (defaults to PKG_NAME)
+            TARGET_NAME="${BINARY_NAME:-$PKG_NAME}"
+            BINARY_SRC="${APP_ROOT}/${TARGET_NAME}"
+            if [[ ! -f "$BINARY_SRC" ]]; then
+                BINARY_SRC="$(find "${APP_ROOT}" -maxdepth 1 -type f -executable -name "${TARGET_NAME}" -print -quit 2>/dev/null || true)"
+            fi
+            if [[ -z "$BINARY_SRC" || ! -f "$BINARY_SRC" ]]; then
+                echo -e "${RED}✖ Error: Launcher binary '${TARGET_NAME}' not found in the archive${NC}"
+                rm -rf "${EXTRACT_DIR}" "${PKG_BUILD_DIR}"
+                FAILED=$((FAILED + 1))
+                continue
+            fi
+
+            chmod +x "$BINARY_SRC"
+            ln -s "/opt/${APP_DIR}/$(basename "${BINARY_SRC}")" "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
+            rm -rf "${EXTRACT_DIR}"
         else
-            BINARY_SRC="$(find "${EXTRACT_DIR}" -type f -executable -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n1 | cut -f2- || true)"
-        fi
+            # Locate the target binary inside the archive:
+            # 1. Explicit BINARY_NAME (or package name) at the archive root
+            # 2. Same name anywhere in the tree
+            # 3. The largest executable file found
+            TARGET_NAME="${BINARY_NAME:-$PKG_NAME}"
+            BINARY_SRC=""
+            if [ -f "${EXTRACT_DIR}/${TARGET_NAME}" ]; then
+                BINARY_SRC="${EXTRACT_DIR}/${TARGET_NAME}"
+            elif [ -f "${EXTRACT_DIR}/${PKG_NAME}" ]; then
+                BINARY_SRC="${EXTRACT_DIR}/${PKG_NAME}"
+            else
+                BINARY_SRC="$(find "${EXTRACT_DIR}" -type f -executable -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n1 | cut -f2- || true)"
+            fi
 
-        if [[ -z "$BINARY_SRC" || ! -f "$BINARY_SRC" ]]; then
-            echo -e "${RED}✖ Error: No executable binary ('${TARGET_NAME}') found inside the archive${NC}"
-            rm -rf "${EXTRACT_DIR}" "${PKG_BUILD_DIR}"
-            FAILED=$((FAILED + 1))
-            continue
-        fi
+            if [[ -z "$BINARY_SRC" || ! -f "$BINARY_SRC" ]]; then
+                echo -e "${RED}✖ Error: No executable binary ('${TARGET_NAME}') found inside the archive${NC}"
+                rm -rf "${EXTRACT_DIR}" "${PKG_BUILD_DIR}"
+                FAILED=$((FAILED + 1))
+                continue
+            fi
 
-        mv "$BINARY_SRC" "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
-        rm -rf "${EXTRACT_DIR}"
+            mv "$BINARY_SRC" "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
+            rm -rf "${EXTRACT_DIR}"
+        fi
     else
         # Fallback for standalone raw binaries (like talosctl)
         echo -e "${YELLOW}➔ Downloading standalone binary...${NC}"
         curl -fsSL --retry 3 "$DOWNLOAD_URL" -o "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
     fi
 
-    # Guard: never package an empty or missing binary
-    if [ ! -s "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}" ]; then
+    # Guard: never package an empty or missing binary.
+    # A -L symlink (full-app mode) is fine even though its /opt target does not
+    # exist on the build machine.
+    if [ ! -s "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}" ] \
+       && [ ! -L "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}" ]; then
         echo -e "${RED}✖ Error: Binary '${PKG_NAME}' is empty or missing after download/extraction.${NC}"
         rm -rf "${PKG_BUILD_DIR}"
         FAILED=$((FAILED + 1))
         continue
     fi
 
-    # Build the final .deb package using dpkg-deb
-    chmod +x "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
+    # Build the final .deb package using dpkg-deb.
+    # Skip chmod on symlinks: chmod follows them, but the /opt target does not
+    # exist yet on the build machine. The real launcher was chmod'd during install.
+    if [ ! -L "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}" ]; then
+        chmod +x "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
+    fi
     dpkg-deb --build "${PKG_BUILD_DIR}" "${REPO_DIR}/" > /dev/null
     echo -e "${GREEN}✔ Successfully created .deb package for $PKG_NAME ($VERSION).${NC}"
 
