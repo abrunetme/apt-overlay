@@ -57,6 +57,28 @@ hash_file() {
     sha256sum "$1" 2>/dev/null | cut -d' ' -f1 || true
 }
 
+download() {
+    curl -fsSL --retry 3 "$1" -o "$2"
+}
+
+# Remove older .deb versions of this package from the repository
+prune_old_versions() {
+    for old_deb in "${REPO_DIR}/${PKG_NAME}"_*.deb; do
+        [ -e "$old_deb" ] || continue
+        old_ver="$(dpkg-deb --field "$old_deb" Version 2>/dev/null || true)"
+        if [[ "$old_ver" != "$VERSION" ]]; then
+            rm -f "$old_deb"
+        fi
+    done
+}
+
+# Finalize a successfully built package: bump counter, write the cache, cleanup
+finalize_build() {
+    BUILT=$((BUILT + 1))
+    printf '%s\t%s\n' "${FINGERPRINT}" "$(hash_file "${DEB_ARCHIVE}")" > "${CACHE_FILE}"
+    rm -rf "${PKG_BUILD_DIR}"
+}
+
 # --- Clean up packages whose .conf no longer exists ---
 # Iterating once over the cache and the repository prevents orphaned
 # .deb files and sidecars from being served after a package is removed.
@@ -166,7 +188,7 @@ print(d)")"
     fi
     if [ -f "${DEB_ARCHIVE}" ] \
        && [ "${CACHED_FINGERPRINT}" = "${FINGERPRINT}" ] \
-       && [ "$(sha256sum "${DEB_ARCHIVE}" | cut -d' ' -f1)" = "${CACHED_DEB_SHA}" ]; then
+       && [ "$(hash_file "${DEB_ARCHIVE}")" = "${CACHED_DEB_SHA}" ]; then
         echo -e "${GREEN}✔ $PKG_NAME ($VERSION) is already up to date.${NC}"
         SKIPPED=$((SKIPPED + 1))
         continue
@@ -198,8 +220,7 @@ EOF
     # cleanup and orphan detection keep working.
     if [[ "$ASSET_NAME" == *.deb ]]; then
         echo -e "${YELLOW}➔ Downloading official .deb package...${NC}"
-        mkdir -p "${BUILD_DIR}"
-        curl -fsSL --retry 3 "$DOWNLOAD_URL" -o "${BUILD_DIR}/${PKG_NAME}.deb"
+        download "$DOWNLOAD_URL" "${BUILD_DIR}/${PKG_NAME}.deb"
         if ! dpkg-deb --info "${BUILD_DIR}/${PKG_NAME}.deb" > /dev/null 2>&1; then
             echo -e "${RED}✖ Error: Downloaded file is not a valid .deb package${NC}"
             rm -f "${BUILD_DIR}/${PKG_NAME}.deb"
@@ -210,33 +231,28 @@ EOF
         mv "${BUILD_DIR}/${PKG_NAME}.deb" "${DEB_ARCHIVE}"
         echo -e "${GREEN}✔ Re-hosted official .deb for $PKG_NAME ($VERSION).${NC}"
 
-        # Keep only the latest version of this package in the repository
-        for old_deb in "${REPO_DIR}/${PKG_NAME}"_*.deb; do
-            [ -e "$old_deb" ] || continue
-            old_ver="$(dpkg-deb --field "$old_deb" Version 2>/dev/null || true)"
-            if [[ "$old_ver" != "$VERSION" ]]; then
-                rm -f "$old_deb"
-            fi
-        done
-
-        BUILT=$((BUILT + 1))
-        printf '%s\t%s\n' "${FINGERPRINT}" "$(sha256sum "${DEB_ARCHIVE}" | cut -d' ' -f1)" > "${CACHE_FILE}"
-        rm -rf "${PKG_BUILD_DIR}"
+        prune_old_versions
+        finalize_build
         continue
     fi
 
-    # Handle asset types dynamically (.tar.gz extraction vs standalone binary)
-    if [[ "$ASSET_NAME" == *.tar.gz ]]; then
-        echo -e "${YELLOW}➔ Downloading and extracting .tar.gz archive...${NC}"
+    # Handle asset types dynamically (archive extraction vs standalone binary)
+    if [[ "$ASSET_NAME" == *.tar.gz || "$ASSET_NAME" == *.zip ]]; then
+        echo -e "${YELLOW}➔ Downloading and extracting archive...${NC}"
         EXTRACT_DIR="${BUILD_DIR}/extract_${PKG_NAME}"
         mkdir -p "${EXTRACT_DIR}"
-        curl -fsSL --retry 3 "$DOWNLOAD_URL" -o "${EXTRACT_DIR}/archive.tar.gz"
-        tar -xzf "${EXTRACT_DIR}/archive.tar.gz" -C "${EXTRACT_DIR}/"
+        download "$DOWNLOAD_URL" "${EXTRACT_DIR}/archive"
+        if [[ "$ASSET_NAME" == *.tar.gz ]]; then
+            tar -xzf "${EXTRACT_DIR}/archive" -C "${EXTRACT_DIR}/"
+        else
+            unzip -q "${EXTRACT_DIR}/archive" -d "${EXTRACT_DIR}/"
+        fi
 
         # Locate the target binary inside the archive:
         # 1. Explicit BINARY_NAME (or package name) at the archive root
         # 2. Same name anywhere in the tree
-        # 3. The largest executable file found
+        # 3. The largest executable file found. zip archives may not
+        #    preserve the exec bit, so fall back to the largest file.
         TARGET_NAME="${BINARY_NAME:-$PKG_NAME}"
         BINARY_SRC=""
         if [ -f "${EXTRACT_DIR}/${TARGET_NAME}" ]; then
@@ -246,34 +262,7 @@ EOF
         else
             BINARY_SRC="$(find "${EXTRACT_DIR}" -type f -executable -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n1 | cut -f2- || true)"
         fi
-
-        if [[ -z "$BINARY_SRC" || ! -f "$BINARY_SRC" ]]; then
-            echo -e "${RED}✖ Error: No executable binary ('${TARGET_NAME}') found inside the archive${NC}"
-            rm -rf "${EXTRACT_DIR}" "${PKG_BUILD_DIR}"
-            FAILED=$((FAILED + 1))
-            continue
-        fi
-
-        mv "$BINARY_SRC" "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
-        rm -rf "${EXTRACT_DIR}"
-    elif [[ "$ASSET_NAME" == *.zip ]]; then
-        echo -e "${YELLOW}➔ Downloading and extracting .zip archive...${NC}"
-        EXTRACT_DIR="${BUILD_DIR}/extract_${PKG_NAME}"
-        mkdir -p "${EXTRACT_DIR}"
-        curl -fsSL --retry 3 "$DOWNLOAD_URL" -o "${EXTRACT_DIR}/archive.zip"
-        unzip -q "${EXTRACT_DIR}/archive.zip" -d "${EXTRACT_DIR}/"
-
-        # Locate the target binary inside the archive:
-        # 1. Explicit BINARY_NAME (or package name) at the archive root
-        # 2. Same name anywhere in the tree
-        # 3. The largest file found (unzip may not preserve the exec bit)
-        TARGET_NAME="${BINARY_NAME:-$PKG_NAME}"
-        BINARY_SRC=""
-        if [ -f "${EXTRACT_DIR}/${TARGET_NAME}" ]; then
-            BINARY_SRC="${EXTRACT_DIR}/${TARGET_NAME}"
-        elif [ -f "${EXTRACT_DIR}/${PKG_NAME}" ]; then
-            BINARY_SRC="${EXTRACT_DIR}/${PKG_NAME}"
-        else
+        if [[ -z "$BINARY_SRC" ]]; then
             BINARY_SRC="$(find "${EXTRACT_DIR}" -type f -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n1 | cut -f2- || true)"
         fi
 
@@ -289,7 +278,7 @@ EOF
     else
         # Fallback for standalone raw binaries (like talosctl)
         echo -e "${YELLOW}➔ Downloading standalone binary...${NC}"
-        curl -fsSL --retry 3 "$DOWNLOAD_URL" -o "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
+        download "$DOWNLOAD_URL" "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
     fi
 
     # Guard: never package an empty or missing binary
@@ -306,19 +295,9 @@ EOF
     echo -e "${GREEN}✔ Successfully created .deb package for $PKG_NAME ($VERSION).${NC}"
 
     # Keep only the latest version of this package in the repository
-    for old_deb in "${REPO_DIR}/${PKG_NAME}"_*.deb; do
-        [ -e "$old_deb" ] || continue
-        old_ver="$(dpkg-deb --field "$old_deb" Version 2>/dev/null || true)"
-        if [[ "$old_ver" != "$VERSION" ]]; then
-            rm -f "$old_deb"
-        fi
-    done
+    prune_old_versions
 
-    BUILT=$((BUILT + 1))
-    printf '%s\t%s\n' "${FINGERPRINT}" "$(sha256sum "${DEB_ARCHIVE}" | cut -d' ' -f1)" > "${CACHE_FILE}"
-
-    # Cleanup build workspace for this package
-    rm -rf "${PKG_BUILD_DIR}"
+    finalize_build
 done
 
 # --- GENERATE APT REPOSITORY INDICES ---
