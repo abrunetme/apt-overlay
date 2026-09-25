@@ -105,7 +105,9 @@ for pkg_file in "${ROOT}"/packages/*.conf; do
     # Reset previous package definition (all supported keys)
     unset REPO_PATH PKG_NAME DESCRIPTION ASSET_NAME BINARY_NAME HOME_PAGE DOWNLOAD_URL LATEST_URL LATEST_JSON_FIELD
 
-    # Load package definition
+    # .conf files are declarative KEY="value" stanzas; the glob path is not constant,
+    # so ShellCheck cannot follow the source.
+    # shellcheck disable=SC1090
     source "$pkg_file"
     if [[ -z "${REPO_PATH:-}" ]]; then
         echo -e "${RED}✖ Error: Missing REPO_PATH${NC}"
