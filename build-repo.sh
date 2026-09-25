@@ -256,6 +256,36 @@ EOF
 
         mv "$BINARY_SRC" "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
         rm -rf "${EXTRACT_DIR}"
+    elif [[ "$ASSET_NAME" == *.zip ]]; then
+        echo -e "${YELLOW}➔ Downloading and extracting .zip archive...${NC}"
+        EXTRACT_DIR="${BUILD_DIR}/extract_${PKG_NAME}"
+        mkdir -p "${EXTRACT_DIR}"
+        curl -fsSL --retry 3 "$DOWNLOAD_URL" -o "${EXTRACT_DIR}/archive.zip"
+        unzip -q "${EXTRACT_DIR}/archive.zip" -d "${EXTRACT_DIR}/"
+
+        # Locate the target binary inside the archive:
+        # 1. Explicit BINARY_NAME (or package name) at the archive root
+        # 2. Same name anywhere in the tree
+        # 3. The largest file found (unzip may not preserve the exec bit)
+        TARGET_NAME="${BINARY_NAME:-$PKG_NAME}"
+        BINARY_SRC=""
+        if [ -f "${EXTRACT_DIR}/${TARGET_NAME}" ]; then
+            BINARY_SRC="${EXTRACT_DIR}/${TARGET_NAME}"
+        elif [ -f "${EXTRACT_DIR}/${PKG_NAME}" ]; then
+            BINARY_SRC="${EXTRACT_DIR}/${PKG_NAME}"
+        else
+            BINARY_SRC="$(find "${EXTRACT_DIR}" -type f -printf '%s\t%p\n' 2>/dev/null | sort -nr | head -n1 | cut -f2- || true)"
+        fi
+
+        if [[ -z "$BINARY_SRC" || ! -f "$BINARY_SRC" ]]; then
+            echo -e "${RED}✖ Error: No binary ('${TARGET_NAME}') found inside the archive${NC}"
+            rm -rf "${EXTRACT_DIR}" "${PKG_BUILD_DIR}"
+            FAILED=$((FAILED + 1))
+            continue
+        fi
+
+        mv "$BINARY_SRC" "${PKG_BUILD_DIR}/usr/local/bin/${PKG_NAME}"
+        rm -rf "${EXTRACT_DIR}"
     else
         # Fallback for standalone raw binaries (like talosctl)
         echo -e "${YELLOW}➔ Downloading standalone binary...${NC}"
